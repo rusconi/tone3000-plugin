@@ -61,6 +61,36 @@ alignment and latency changes made inside an open editor still need dedicated va
   - Still open (Element's real advantage): an out-of-process scanner + cached
     `KnownPluginList` for nice names/manufacturer grouping without a UI freeze.
 
+## JUCE patch — macOS popup submenu z-order (2026-10-10)
+
+The vendor **submenus rendered behind the parent menu**. This is a known JUCE
+**9.0.2+ regression** (upstream commit `5fc8d348` "Raise modal windows to the
+modal window level"; JUCE forum thread 69655): `PopupMenu` sub-menus are
+`ComponentPeer::windowIsTemporary`, and `MacComponentPeer::modalComponentManagerChanged()`
+re-levels them, pushing them below the parent.
+
+Fix (applied to the fetched JUCE): skip temporary windows when computing the new
+window level, in
+`libs/juce/modules/juce_gui_basics/native/juce_NSViewComponentPeer_mac.mm`
+(`modalComponentManagerChanged`, the `newLevel` lambda):
+
+```cpp
+if (isSharedWindow)
+    return {};
+if ((getStyleFlags() & ComponentPeer::windowIsTemporary) != 0)  // <-- added
+    return {};
+auto* manager = ModalComponentManager::getInstance();
+```
+
+`libs/juce` is **fetched/gitignored**, so this is not part of the repo commit.
+Reapply after any clean configure with:
+
+```
+sh script/patch_juce_popupmenu.sh
+```
+
+(Idempotent.) The script is committed so rebuilds are reproducible.
+
 ## Build (self-contained toolchain Codex provisioned)
 
 CMake + Ninja live under the build root (not on PATH):
