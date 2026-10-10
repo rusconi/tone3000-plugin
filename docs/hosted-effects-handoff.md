@@ -1,6 +1,8 @@
 # Hosted AU/VST3 effects — build & handoff notes
 
-Status: **implemented, built, validated, committed (`7ce1aea`), pushed to Gitea (`main`).**
+Status: **implemented, built, validated, and confirmed working by the user.** HEAD `956e8fa`
+on Gitea (`zack/tone3000-plugin-effects`, `main`). Full commit-by-commit record:
+[`hosted-effects-session-log.md`](hosted-effects-session-log.md).
 Last updated: 2026-10-10 by `opencode-bart` (continuation of the Codex session `01a1271e…`,
 which ended mid-smoke-test after a model switch). This note exists so Codex — or anyone —
 can resume with full context. All remaining work is hands-on (see Next steps).
