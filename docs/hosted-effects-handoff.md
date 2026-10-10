@@ -89,12 +89,18 @@ Build only the plugin targets:
 |---|---|
 | Compile (Standalone + AU + VST3) | PASS (binaries newer than newest source; `ninja -n` shows no compile needed) |
 | `auval -v aumf T3K0 TFTF` | **AU VALIDATION SUCCEEDED** |
+| **pluginval (VST3, strictness 8)** | **SUCCESS** — incl. VST3 validator, audio processing, state restore, fuzz parameters |
+| **pluginval (AU, strictness 8)** | **SUCCESS** — auval exit 0 |
 | Standalone launch | app ran >6 s, no crash report, quit cleanly |
 | VST3 bundle structure | `Contents/Resources/moduleinfo.json` present |
-| Code signing | ad-hoc (expected; `codesign` reports the usual "no resources but signature indicates…" for a locally built AU). Not notarized — local/dev only. |
+| Code signing | ad-hoc (expected; `codesign` reports the usual "no resources but signature indicates…" for a locally built AU). Not app-store/notarized — local/dev only. |
 
-NOT yet done: `pluginval` (not installed) for the VST3; hands-on click-through of the effect
-editor and parallel-branch latency; install-into-a-DAW test.
+Validated with pluginval **1.0.4** (Tracktion), run from a downloaded release
+(`pluginval --strictness-level 8 --validate <bundle>`).
+
+NOT yet done (hands-on): click-through the hosted-effect editor (load an AU/VST3 into the chain,
+open its editor, confirm audio + preset round-trip) and parallel-branch latency when an effect
+changes its own latency; install-into-a-DAW test.
 
 Installed for testing to the user plug-in dirs (reversible):
 `~/Library/Audio/Plug-Ins/Components/TONE3000.component`,
@@ -127,7 +133,7 @@ Installed for testing to the user plug-in dirs (reversible):
 
 ## Next steps (for whoever resumes)
 
-1. `pluginval --strictness-level 8` against the built `.vst3` (install pluginval first).
+1. ~~`pluginval --strictness-level 8`~~ **DONE — VST3 + AU both SUCCESS (2026-10-10).**
 2. Hands-on: add a simple AU (e.g. a gain/EQ) in the standalone, open its editor, verify audio
    passes and preset round-trips; then test in a DAW.
 3. Validate parallel-branch latency alignment when an effect changes its own latency.
