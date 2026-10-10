@@ -60,6 +60,12 @@ alignment and latency changes made inside an open editor still need dedicated va
     Duplicate names under one vendor are tagged `(AU)`/`(VST3)`.
   - Still open (Element's real advantage): an out-of-process scanner + cached
     `KnownPluginList` for nice names/manufacturer grouping without a UI freeze.
+  - **Custom in-app browser** (`plugin/ui/widgets/EffectMenu.{h,cpp}`, a `Popover`):
+    two columns — vendors left, that vendor's effects right. Picking a vendor
+    snapshots the vendor column, blurs it (`core/Blur.h` `blurImage`) and paints the
+    blurred image over it, so the background menu recedes while the effect column is
+    active. Uses `MenuRow` rows + `Viewport`s. This replaced the native `PopupMenu`
+    for this action (a native popup cannot blur its own parent window).
 
 ## JUCE patch — macOS popup submenu z-order (2026-10-10)
 
