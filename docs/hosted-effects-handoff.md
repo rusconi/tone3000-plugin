@@ -58,6 +58,31 @@ $REPO/build/plugin/TONE3000_artefacts/Release/AU/TONE3000.component
 $REPO/build/plugin/TONE3000_artefacts/Release/VST3/TONE3000.vst3
 ```
 
+## Build-time configuration — the publishable key
+
+Build #1 shipped with an **empty** key, so the app surfaced *"TONE3000 publishable key not configured.
+Set T3K_PUBLISHABLE_KEY at build time."* The key is read at **configure** time (`plugin/ui/NativeUi.cmake`
+→ `build/t3k_ui/T3kConfig.h`), so it must exist **before** configuring. Fix applied:
+
+- Wrote `repo/.env` (gitignored): `T3K_PUBLISHABLE_KEY=t3k_pub__B8V_QGmV50ov2YWJzjqOxQE0q1-wURs`
+  (`.env.local` overrides `.env`; a configure-env var overrides both).
+- Reconfigured (`cmake -S "$REPO" -B "$REPO/build"`) → `T3kConfig.h` regenerated with the key → rebuilt.
+
+The value is the app's OAuth **client_id** (publishable, not a secret) and was recovered from the
+installed official app:
+
+```
+grep -aoE "t3k_pub_[A-Za-z0-9_-]{8,}" /Applications/TONE3000.app/Contents/MacOS/TONE3000
+```
+
+**Pre-existing, unrelated:** the `DspTests` target fails to link (`Undefined symbols for architecture
+arm64`) — the same failure is in Codex's original `tests-build.log`. It does not affect the plugin.
+Build only the plugin targets:
+
+```
+"$CM" --build "$REPO/build" --target TONE3000_Standalone TONE3000_AU TONE3000_VST3 -j8
+```
+
 ## Validation performed (2026-10-10)
 
 | check | result |
@@ -96,7 +121,9 @@ Installed for testing to the user plug-in dirs (reversible):
 - Installed for testing into the user plug-in dirs:
   `~/Library/Audio/Plug-Ins/Components/TONE3000.component`,
   `~/Library/Audio/Plug-Ins/VST3/TONE3000.vst3`.
-- Standalone app: `.../build/plugin/TONE3000_artefacts/Release/Standalone/TONE3000.app`.
+- Standalone app: `~/Desktop/TONE3000.app` (also at
+  `.../repo/build/plugin/TONE3000_artefacts/Release/Standalone/TONE3000.app`).
+- Rebuilt with the publishable key (see the config section above); auval re-verified PASS after the rebuild.
 
 ## Next steps (for whoever resumes)
 
