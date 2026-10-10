@@ -39,6 +39,12 @@ alignment and latency changes made inside an open editor still need dedicated va
   `/Library/Audio/Plug-Ins/Components`, VST3 → `/Library/Audio/Plug-Ins/VST3`
   (`ProcessorHostedEffects.cpp`, `listHostedEffects`), instead of JUCE's full default
   search set. Predictable and fast; no user-level locations are scanned.
+- **Add-effect UI is a menu, not a Finder dialog** (2026-10-10), following
+  **kushview/element** (`ui/contextmenus.cpp`): `AddTile` builds a
+  `juce::KnownPluginList` from the scanned descriptions, `createTree(types,
+  sortByManufacturer)`, and renders nested `PopupMenu` submenus (one per
+  manufacturer, item per plugin). The old `Load AU/VST3 Effect` `FileChooser`
+  path was removed. Add-tile menu item is now **"Add AU/VST3 Effect"**.
 
 ## Build (self-contained toolchain Codex provisioned)
 
