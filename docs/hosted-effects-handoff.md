@@ -50,9 +50,14 @@ alignment and latency changes made inside an open editor still need dedicated va
     1024 AU + 140 VST3 installed it never returned.
   - **Fix**: build the menu from a plain **filesystem listing** of
     `/Library/Audio/Plug-Ins/{Components,VST3}` (`listHostedEffectBundles()`,
-    non-instantiating) — opens instantly. Grouped by format then first letter
-    (A–Z, `#`) because the collection is large. Choosing an entry calls
+    non-instantiating) — opens instantly. Choosing an entry calls
     `addHostedEffectFromFile()` (which instantiates only that one plugin).
+  - **Grouping is by vendor**: each bundle's reverse-DNS id is read via
+    `CFBundleGetIdentifier` (CoreFoundation, no instantiation), and the vendor
+    label is the domain's org component (`com.fabfilter…` → FabFilter,
+    `com.izotope…` → iZotope), normalised so `plugin-alliance`/`pluginalliance`
+    merge (121 vendors over 1164 bundles; UA 290, Plugin Alliance 113, iZotope 90).
+    Duplicate names under one vendor are tagged `(AU)`/`(VST3)`.
   - Still open (Element's real advantage): an out-of-process scanner + cached
     `KnownPluginList` for nice names/manufacturer grouping without a UI freeze.
 
