@@ -39,12 +39,22 @@ alignment and latency changes made inside an open editor still need dedicated va
   `/Library/Audio/Plug-Ins/Components`, VST3 → `/Library/Audio/Plug-Ins/VST3`
   (`ProcessorHostedEffects.cpp`, `listHostedEffects`), instead of JUCE's full default
   search set. Predictable and fast; no user-level locations are scanned.
-- **Add-effect UI is a menu, not a Finder dialog** (2026-10-10), following
-  **kushview/element** (`ui/contextmenus.cpp`): `AddTile` builds a
-  `juce::KnownPluginList` from the scanned descriptions, `createTree(types,
-  sortByManufacturer)`, and renders nested `PopupMenu` submenus (one per
-  manufacturer, item per plugin). The old `Load AU/VST3 Effect` `FileChooser`
-  path was removed. Add-tile menu item is now **"Add AU/VST3 Effect"**.
+- **Add-effect UI is a menu, not a Finder dialog** (2026-10-10). The old
+  `Load AU/VST3 Effect` `FileChooser` was removed; the add-tile item is now
+  **"Add AU/VST3 Effect"**.
+  - First attempt followed **kushview/element** (`ui/contextmenus.cpp`): build a
+    `KnownPluginList`, `createTree(types, sortByManufacturer)`, nested submenus.
+    **This HUNG the app** — `listHostedEffects()` runs JUCE
+    `searchPathsForPlugins`, which instantiates/loads every plugin to identify it;
+    on the message thread that blocks the UI, so the menu never appears. With
+    1024 AU + 140 VST3 installed it never returned.
+  - **Fix**: build the menu from a plain **filesystem listing** of
+    `/Library/Audio/Plug-Ins/{Components,VST3}` (`listHostedEffectBundles()`,
+    non-instantiating) — opens instantly. Grouped by format then first letter
+    (A–Z, `#`) because the collection is large. Choosing an entry calls
+    `addHostedEffectFromFile()` (which instantiates only that one plugin).
+  - Still open (Element's real advantage): an out-of-process scanner + cached
+    `KnownPluginList` for nice names/manufacturer grouping without a UI freeze.
 
 ## Build (self-contained toolchain Codex provisioned)
 
