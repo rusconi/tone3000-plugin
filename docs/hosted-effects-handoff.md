@@ -1,9 +1,9 @@
 # Hosted AU/VST3 effects — build & handoff notes
 
-Status: **implemented, built, validated, committed, pushed to Gitea.**
+Status: **implemented, built, validated, committed (`7ce1aea`), pushed to Gitea (`main`).**
 Last updated: 2026-10-10 by `opencode-bart` (continuation of the Codex session `01a1271e…`,
 which ended mid-smoke-test after a model switch). This note exists so Codex — or anyone —
-can resume with full context.
+can resume with full context. All remaining work is hands-on (see Next steps).
 
 ## What this fork adds
 
@@ -75,13 +75,28 @@ Installed for testing to the user plug-in dirs (reversible):
 `~/Library/Audio/Plug-Ins/Components/TONE3000.component`,
 `~/Library/Audio/Plug-Ins/VST3/TONE3000.vst3`.
 
-## Git / remotes
+## Git / remotes (pushed 2026-10-10)
 
 - Local clone: `/Users/zack/.codex/.tmp/tone3000-build.7xAQeo/repo` (fork of
-  `github.com/tone-3000/tone3000-plugin`, base `ab5e5ae`, version 0.0.12).
-- `origin` = the upstream GitHub (left untouched — **never push the fork there**).
-- Gitea (target): `zack/tone3000-plugin-effects` on `git.zyusof.net` **and** `git.gonz3.net`
-  (created empty by Codex; this work pushes the branch + commit to both).
+  `github.com/tone-3000/tone3000-plugin`, base `ab5e5ae`, v0.0.12). The clone was **shallow**;
+  run `git fetch --unshallow origin` first (Gitea rejects shallow updates: "shallow update not allowed").
+- Pushed: **`zack/tone3000-plugin-effects` → `main` @ `7ce1aea`**
+  ("chain: host installed AU/VST3 effects in chain slots").
+- `origin` = upstream GitHub — **left untouched; never push the fork there**.
+- `git.zyusof.net` and `git.gonz3.net` are the **same Gitea backend** (both return the same
+  commit + `updated_at`). Push once to `git.zyusof.net` and both hostnames reflect it; the raw
+  `git.gonz3.net` LAN path (192.168.1.35:443) refused from this Mac, but the Gitea API confirms updated.
+- Remote `gitea` = `https://git.zyusof.net/zack/tone3000-plugin-effects.git`; auth via a
+  `GIT_ASKPASS` token from `infra_secrets` service 35 (never stored in config).
+
+## Artifacts
+
+- Package: `/Users/zack/.codex/.tmp/tone3000-build.7xAQeo/dist/TONE3000-effects-0.0.12-macos-arm64-2026-10-10.zip`
+  (20 MB — Standalone `.app` + AU `.component` + VST3 `.vst3`).
+- Installed for testing into the user plug-in dirs:
+  `~/Library/Audio/Plug-Ins/Components/TONE3000.component`,
+  `~/Library/Audio/Plug-Ins/VST3/TONE3000.vst3`.
+- Standalone app: `.../build/plugin/TONE3000_artefacts/Release/Standalone/TONE3000.app`.
 
 ## Next steps (for whoever resumes)
 
