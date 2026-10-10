@@ -35,6 +35,10 @@ alignment and latency changes made inside an open editor still need dedicated va
   `ToneTile` effect window / menu / paint.
 - `plugin/CMakeLists.txt` — `PLUGINHOST_AU TRUE` (Apple) + `JUCE_PLUGINHOST_VST3=1`.
 - `README.md`, `docs/hosted-effects.md` — feature + test steps.
+- Scan locations are **hardcoded** (2026-10-10): Audio Unit →
+  `/Library/Audio/Plug-Ins/Components`, VST3 → `/Library/Audio/Plug-Ins/VST3`
+  (`ProcessorHostedEffects.cpp`, `listHostedEffects`), instead of JUCE's full default
+  search set. Predictable and fast; no user-level locations are scanned.
 
 ## Build (self-contained toolchain Codex provisioned)
 
