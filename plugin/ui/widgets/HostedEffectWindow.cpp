@@ -19,6 +19,13 @@ juce::CriticalSection& graphicLock() {
   return lock;
 }
 
+// The open editor window of each block: one per block, as a plugin instance has
+// at most one active editor (a second createEditorAndMakeActive() returns null).
+std::map<std::string, juce::Component::SafePointer<juce::Component>>& openWindows() {
+  static std::map<std::string, juce::Component::SafePointer<juce::Component>> windows;
+  return windows;
+}
+
 std::map<std::string, juce::Image>& graphicMap() {
   static std::map<std::string, juce::Image> images;
   return images;
@@ -96,10 +103,13 @@ public:
     }
     setVisible(true);
     toFront(true);
+    openWindows()[blockId_] = this;
     startTimer(400);  // capture after it has painted on screen
   }
   ~HostedEffectWindow() override {
     stopTimer();
+    if (auto it = openWindows().find(blockId_); it != openWindows().end() && it->second == this)
+      openWindows().erase(it);
     clearContentComponent();
   }
   // Deleted after this event has fully unwound: the close arrives from the
@@ -159,6 +169,13 @@ bool openHostedEffectEditor(Services& services, const std::string& blockId,
   auto instance = services.backend.hostedEffectInstance(blockId);
   if (instance == nullptr)
     return false;
+  // Already open: bring it forward rather than opening a second window (which
+  // would get no editor and fall back to the generic one, on top of the first).
+  if (auto it = openWindows().find(blockId); it != openWindows().end())
+    if (auto* window = it->second.getComponent(); window != nullptr && window->isVisible()) {
+      window->toFront(true);
+      return true;
+    }
   new HostedEffectWindow(std::move(instance), name, blockId);
   return true;
 }
