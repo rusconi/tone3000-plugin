@@ -154,6 +154,19 @@ CPMAddPackage(
     SOURCE_DIR ${LIB_DIR}/juce
 )
 
+# Linux: JUCE's XEmbedComponent (hosted LV2 plugin GUIs) can run a queued
+# resize callback on a deleted component; see script/patch_juce_xembed.sh.
+# Idempotent, so it simply runs on every configure.
+if (UNIX AND NOT APPLE)
+    execute_process(
+        COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/script/patch_juce_xembed.sh"
+                   "${LIB_DIR}/juce/modules/juce_gui_extra/native/juce_XEmbedComponent_linux.cpp"
+        RESULT_VARIABLE _t3k_xembed_patch)
+    if (NOT _t3k_xembed_patch EQUAL 0)
+        message(FATAL_ERROR "script/patch_juce_xembed.sh failed; JUCE may have changed")
+    endif()
+endif()
+
 # JUCE source patches (idempotent, configure time; JUCE lives in the
 # gitignored libs/). Each one is anchored on a T3K_* marker so a re-run is a
 # no-op, and fails loudly when the JUCE layout moves under it.

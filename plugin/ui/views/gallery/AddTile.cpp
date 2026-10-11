@@ -41,8 +41,13 @@ void AddTile::open() {
 }
 
 std::vector<ContextMenu::Item> AddTile::menuItems() {
+#if JUCE_MAC
+  const char* addEffectLabel = "Add AU/VST3 Effect";
+#else
+  const char* addEffectLabel = "Add VST3/LV2 Effect";
+#endif
   std::vector<ContextMenu::Item> items{
-      {"Add AU/VST3 Effect", Icon::File, help::Key::loadFileTile,
+      {addEffectLabel, Icon::File, help::Key::loadFileTile,
        [this] { chooseInstalledEffect(); }},
       {"Paste", Icon::ClipboardPaste, help::Key::pasteBlock,
        [this] { if (onPaste) onPaste(blockId()); }, /*disabled=*/!canPaste_},
@@ -59,7 +64,11 @@ void AddTile::chooseInstalledEffect() {
   const auto listed = services().backend.listHostedEffectBundles();
   const auto* array = listed.getArray();
   if (array == nullptr || array->isEmpty()) {
+#if JUCE_MAC
     services().toast.show("No AU/VST3 effects found in /Library/Audio/Plug-Ins");
+#else
+    services().toast.show("No VST3/LV2 effects found");
+#endif
     return;
   }
 
@@ -67,8 +76,8 @@ void AddTile::chooseInstalledEffect() {
   entries.reserve(static_cast<size_t>(array->size()));
   for (const auto& effect : *array)
     entries.push_back({effect["vendor"].toString(), effect["name"].toString(),
-                       effect["format"].toString() == "VST3" ? juce::String("VST3")
-                                                             : juce::String("AU"),
+                       effect["format"].toString() == "AudioUnit" ? juce::String("AU")
+                                                                  : effect["format"].toString(),
                        effect["path"].toString()});
 
   effectMenu_ = std::make_unique<EffectMenu>(std::move(entries));
@@ -80,7 +89,7 @@ void AddTile::chooseInstalledEffect() {
   const std::string target = blockId();
   effectMenu_->onChoose = [svc, target](const juce::String& path, const juce::String& name) {
     juce::MessageManager::callAsync([svc, target, path, name] {
-      const auto id = svc->backend.addHostedEffectFromFile(juce::File(path), target);
+      const auto id = svc->backend.addHostedEffectFromFile(path, target);
       if (id.empty()) {
         svc->toast.show("Could not load this effect");
         return;

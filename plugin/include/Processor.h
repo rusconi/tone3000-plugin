@@ -94,7 +94,7 @@ public:
   std::string loadTone(const juce::String& toneJsonString,
                        const std::string& targetInsertId = {});
   // Desktop plug-in hosting. Descriptions are JUCE PluginDescription XML;
-  // installed AU and VST3 effects are discovered on demand by the editor.
+  // installed AU, VST3 and (Linux) LV2 effects are discovered on demand by the editor.
   juce::var listHostedEffects() const;
   // Fast, non-instantiating listing of installed effect bundles (just the two
   // standard system dirs). Use this to build the add-effect menu on the message
@@ -105,7 +105,8 @@ public:
   static juce::String vendorForBundle(const juce::String& bundlePath);
   std::string addHostedEffect(const juce::String& descriptionXml,
                               const std::string& targetInsertId = {});
-  std::string addHostedEffectFromFile(const juce::File& bundle,
+  // A plugin bundle path (.component / .vst3 / .lv2) or an LV2 plugin URI.
+  std::string addHostedEffectFromFile(const juce::String& fileOrIdentifier,
                                       const std::string& targetInsertId = {});
   std::shared_ptr<juce::AudioPluginInstance> hostedEffectInstance(
       const std::string& blockId);

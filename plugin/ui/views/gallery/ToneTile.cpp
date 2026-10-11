@@ -178,7 +178,7 @@ void ToneTile::paint(juce::Graphics& g) {
   if (block_.isEffect && !dropArmed()) {
     auto area = getLocalBounds().reduced(12);
     auto nameArea = area.removeFromBottom(18);
-    const auto graphic = hostedEffectGraphic(blockId());
+    const auto graphic = hostedEffectGraphic(blockId(), juce::String(block_.effectPath), block_.tone.title);
     if (graphic.isValid()) {
       // The plugin's own interface, captured when its window was open.
       g.drawImage(graphic, area.toFloat(),

@@ -47,7 +47,7 @@ public:
   virtual juce::var listHostedEffects() { return juce::Array<juce::var>(); }
   virtual juce::var listHostedEffectBundles() { return juce::Array<juce::var>(); }
   virtual std::string addHostedEffect(const juce::String&, const std::string&) { return {}; }
-  virtual std::string addHostedEffectFromFile(const juce::File&, const std::string&) { return {}; }
+  virtual std::string addHostedEffectFromFile(const juce::String&, const std::string&) { return {}; }
   virtual std::shared_ptr<juce::AudioPluginInstance> hostedEffectInstance(const std::string&) {
     return {};
   }

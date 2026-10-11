@@ -1,4 +1,4 @@
-// Hosts a hosted AU/VST3 effect's own editor GUI in a top-level window, and
+// Hosts a hosted AU/VST3/LV2 effect's own editor GUI in a top-level window, and
 // captures a static image of that GUI for the effect's chain slot.
 #pragma once
 
@@ -17,9 +17,11 @@ bool openHostedEffectEditor(Services& services, const std::string& blockId,
                             const juce::String& name);
 
 // Static graphic for an effect block: the plugin's own GUI captured while its
-// editor window was open (so the slot can show what's loaded). Empty until the
-// editor has been opened at least once.
-juce::Image hostedEffectGraphic(const std::string& blockId);
+// editor window was open (so the slot can show what's loaded). The last capture
+// of the same plugin (path + name) is saved to disk and used for any block of
+// it until its own editor has been opened. Empty if it never was.
+juce::Image hostedEffectGraphic(const std::string& blockId, const juce::String& pluginPath,
+                               const juce::String& name);
 
 // Broadcasts when a graphic becomes available, so slots repaint themselves.
 juce::ChangeBroadcaster& hostedEffectGraphics();

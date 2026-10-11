@@ -32,7 +32,7 @@ public:
   juce::var listHostedEffectBundles() override;
   std::string addHostedEffect(const juce::String& descriptionXml,
                               const std::string& targetInsertId) override;
-  std::string addHostedEffectFromFile(const juce::File& bundle,
+  std::string addHostedEffectFromFile(const juce::String& fileOrIdentifier,
                                       const std::string& targetInsertId) override;
   std::shared_ptr<juce::AudioPluginInstance> hostedEffectInstance(
       const std::string& blockId) override;

@@ -58,7 +58,6 @@ configure_file("${T3K_UI_DIR}/core/T3kConfig.h.in" "${CMAKE_BINARY_DIR}/t3k_ui/T
 
 file(GLOB_RECURSE T3K_UI_SOURCES CONFIGURE_DEPENDS
     "${T3K_UI_DIR}/core/*.cpp"    "${T3K_UI_DIR}/core/*.h"
-    "${T3K_UI_DIR}/core/*.mm"
     "${T3K_UI_DIR}/model/*.cpp"   "${T3K_UI_DIR}/model/*.h"
     "${T3K_UI_DIR}/backend/Backend.h"
     "${T3K_UI_DIR}/services/*.cpp" "${T3K_UI_DIR}/services/*.h"
@@ -69,6 +68,12 @@ file(GLOB_RECURSE T3K_UI_SOURCES CONFIGURE_DEPENDS
     # Nayuki's QR Code generator (MIT), for the sign-in screen's device code.
     "${T3K_UI_DIR}/vendor/*/*.cpp" "${T3K_UI_DIR}/vendor/*/*.hpp"
 )
+# Objective-C++ sources only build on Apple; other platforms take the .cpp
+# fallbacks next to them (e.g. WindowCapture.cpp).
+if(APPLE)
+    file(GLOB_RECURSE T3K_UI_OBJCXX_SOURCES CONFIGURE_DEPENDS "${T3K_UI_DIR}/core/*.mm")
+    list(APPEND T3K_UI_SOURCES ${T3K_UI_OBJCXX_SOURCES})
+endif()
 
 function(t3k_add_native_ui target)
     target_sources(${target} PRIVATE ${T3K_UI_SOURCES})
@@ -79,4 +84,9 @@ function(t3k_add_native_ui target)
     # two meters ticking together would repaint the whole plate between them.
     target_compile_definitions(${target} PRIVATE
         $<$<PLATFORM_ID:Darwin>:JUCE_COREGRAPHICS_RENDER_WITH_MULTIPLE_PAINT_CALLS=1>)
+    # Linux: WindowCapture.cpp reads the hosted editor's pixels through Xlib.
+    if (UNIX AND NOT APPLE)
+        find_package(X11 REQUIRED)
+        target_link_libraries(${target} PRIVATE X11::X11)
+    endif()
 endfunction()

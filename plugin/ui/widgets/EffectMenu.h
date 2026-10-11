@@ -1,6 +1,7 @@
 // Add-effect browser: a two-column popover — vendors on the left, that vendor's
 // plugins on the right. When a vendor is picked the plugin column opens and the
 // vendor column is blurred (backdrop blur), so the "background" menu recedes.
+// The search field on top lists matching plugins of every vendor instead.
 // Drawn with our own components (not a native PopupMenu) so we can blur it.
 #pragma once
 
@@ -12,6 +13,7 @@
 
 #include "MenuRow.h"
 #include "Popover.h"
+#include "TextField.h"
 
 namespace t3k::ui {
 
@@ -20,7 +22,7 @@ public:
   struct Entry {
     juce::String vendor;
     juce::String name;
-    juce::String format;  // "AU" or "VST3"
+    juce::String format;  // "AU", "VST3" or "LV2"
     juce::String path;
   };
 
@@ -48,11 +50,19 @@ private:
   };
 
   void buildVendors();
-  void buildPlugins(const juce::String& vendor);
+  // Fills the plugin column; `withVendor` labels each row with its vendor too.
+  void buildPlugins(std::vector<const Entry*> items, bool withVendor);
   void pickVendor(const juce::String& vendor);
+  void search(const juce::String& query);
+  void showPluginColumn();
+  void hidePluginColumn();
+  void choose(const Entry& entry);
   void placeClamped(int x, int y);
 
   std::vector<Entry> entries_;
+  TextField search_;
+  juce::String vendor_;                 // picked vendor, kept while searching
+  std::vector<const Entry*> results_;  // current search results (Enter picks the first)
   juce::Component leftColumn_, rightColumn_;
   juce::Viewport leftView_, rightView_;
   Frost frost_;
@@ -62,6 +72,8 @@ private:
   static constexpr int kLeftW = 210;
   static constexpr int kRightW = 290;
   static constexpr int kHeight = 420;
+  static constexpr int kSearchHeight = 32;
+  static constexpr int kSearchGap = 8;
   static constexpr int kRowH = MenuRow::kContext.height;
   static constexpr int kScrollW = 8;
   static constexpr int kBlurRadius = 9;

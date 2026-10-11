@@ -1051,6 +1051,10 @@ juce::var TONE3000Processor::getChainState(int knownRevision) const {
               xml != nullptr && desc.loadFromXml(*xml))
             row.effectPath = desc.fileOrIdentifier;
           row.effectVendor = vendorForBundle(row.effectPath);
+          // No bundle id to read (LV2, or a VST3 without moduleinfo.json):
+          // the plugin's own manufacturer name.
+          if (row.effectVendor == "Other" && desc.manufacturerName.isNotEmpty())
+            row.effectVendor = desc.manufacturerName;
         }
         row.toneSummary = block->toneSummary;
         row.toneId = block->toneId;

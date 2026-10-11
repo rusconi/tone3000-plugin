@@ -57,9 +57,9 @@ std::string ProcessorBackend::addHostedEffect(const juce::String& descriptionXml
                                                const std::string& targetInsertId) {
   return processor_.addHostedEffect(descriptionXml, targetInsertId);
 }
-std::string ProcessorBackend::addHostedEffectFromFile(const juce::File& bundle,
+std::string ProcessorBackend::addHostedEffectFromFile(const juce::String& fileOrIdentifier,
                                                        const std::string& targetInsertId) {
-  return processor_.addHostedEffectFromFile(bundle, targetInsertId);
+  return processor_.addHostedEffectFromFile(fileOrIdentifier, targetInsertId);
 }
 std::shared_ptr<juce::AudioPluginInstance> ProcessorBackend::hostedEffectInstance(
     const std::string& blockId) {

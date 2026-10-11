@@ -279,6 +279,11 @@ juce_add_plugin(${PROJECT_NAME}
 # JUCE's CMake helper exposes PLUGINHOST_AU, while VST3 hosting is enabled
 # through the module option on the shared-code target.
 target_compile_definitions(${PROJECT_NAME} PUBLIC JUCE_PLUGINHOST_VST3=1)
+# Linux also hosts LV2 (JUCE carries its own lilv). Not on macOS, so the
+# macOS releases keep hosting exactly AU + VST3.
+if (UNIX AND NOT APPLE)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC JUCE_PLUGINHOST_LV2=1)
+endif()
 
 # What App Store Connect checks on upload. Nothing here changes how the app
 # behaves; without it the upload is rejected or the icon goes missing.

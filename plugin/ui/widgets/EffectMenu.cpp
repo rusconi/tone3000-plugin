@@ -33,8 +33,21 @@ EffectMenu::EffectMenu(std::vector<Entry> entries) : entries_(std::move(entries)
   rightView_.setScrollBarsShown(true, false);
   rightView_.setScrollBarThickness(kScrollW);
 
+  search_.setPlaceholder("Search effects");
+  search_.setCornerRadius(8);
+  search_.setPadding(6, 32, 10);
+  search_.setLeadingIcon(Icon::Search, 14, 11, theme::kGray);
+  search_.setBackground(theme::kSurfaceRaised);
+  search_.onChange = [this](const juce::String& text) { search(text.trim()); };
+  search_.onEnter = [this] {
+    if (!results_.empty())
+      choose(*results_.front());
+  };
+  search_.onEscape = [this] { dismiss(); };
+  addAndMakeVisible(search_);
+
   buildVendors();
-  setSize(2 * (kBorder + kPad) + kLeftW, 2 * (kBorder + kPad) + kHeight);
+  setSize(2 * (kBorder + kPad) + kLeftW, 2 * (kBorder + kPad) + kSearchHeight + kSearchGap + kHeight);
 }
 
 void EffectMenu::centreOn(juce::Component& anchor) {
@@ -48,6 +61,7 @@ void EffectMenu::centreOn(juce::Component& anchor) {
   const auto a = overlay->getLocalArea(&anchor, anchor.getLocalBounds().toFloat());
   placeClamped(juce::roundToInt(a.getCentreX()) - getWidth() / 2,
                juce::roundToInt(a.getBottom()) + 8);
+  search_.focus();  // type to search straight away
 }
 
 void EffectMenu::placeClamped(int x, int y) {
@@ -69,6 +83,8 @@ void EffectMenu::paint(juce::Graphics& g) {
 
 void EffectMenu::resized() {
   auto r = contentBounds().reduced(kPad);
+  search_.setBounds(r.removeFromTop(kSearchHeight));
+  r.removeFromTop(kSearchGap);
   const int fullH = r.getHeight();
   leftColumn_.setBounds(r.removeFromLeft(kLeftW).withHeight(fullH));
   if (rightShown_)
@@ -101,11 +117,7 @@ void EffectMenu::buildVendors() {
   leftView_.setViewPosition(0, 0);
 }
 
-void EffectMenu::buildPlugins(const juce::String& vendor) {
-  std::vector<const Entry*> items;
-  for (const auto& e : entries_)
-    if (e.vendor == vendor)
-      items.push_back(&e);
+void EffectMenu::buildPlugins(std::vector<const Entry*> items, bool withVendor) {
   std::sort(items.begin(), items.end(), [](const Entry* a, const Entry* b) {
     return a->name.compareIgnoreCase(b->name) < 0;
   });
@@ -122,30 +134,88 @@ void EffectMenu::buildPlugins(const juce::String& vendor) {
         label << " (" << entry->format << ")";
         break;
       }
+    if (withVendor)
+      label << "  \u00b7  " << entry->vendor;
     auto* row = new MenuRow(label, std::nullopt, MenuRow::kContext);
     row->setLabelColour(theme::kWhite);
     row->setBounds(0, y, w, kRowH);
-    const auto path = entry->path;
-    const auto name = entry->name;
-    row->onClick = [this, path, name] {
-      // Close the menu before handing off; the handler defers the actual work so
-      // nothing tears this menu (or the tiles) down while the button is mid-click.
-      dismiss();
-      if (onChoose)
-        onChoose(path, name);
-    };
+    row->onClick = [this, entry] { choose(*entry); };
     content->addAndMakeVisible(row);
     y += kRowH;
+  }
+  if (items.empty()) {
+    auto* row = new MenuRow("No matching effects", std::nullopt, MenuRow::kContext);
+    row->setLabelColour(theme::kGray);
+    row->setBounds(0, 0, w, kRowH);
+    content->addAndMakeVisible(row);
   }
   rightView_.setViewedComponent(content, true);
   rightView_.setViewPosition(0, 0);
 }
 
+void EffectMenu::choose(const Entry& entry) {
+  // Copied first: dismissing may delete this menu, and with it the entries.
+  const auto path = entry.path;
+  const auto name = entry.name;
+  auto chosen = onChoose;
+  // Close the menu before handing off; the handler defers the actual work so
+  // nothing tears this menu (or the tiles) down while the button is mid-click.
+  dismiss();
+  if (chosen)
+    chosen(path, name);
+}
+
 void EffectMenu::pickVendor(const juce::String& vendor) {
-  buildPlugins(vendor);
+  vendor_ = vendor;
+  std::vector<const Entry*> items;
+  for (const auto& e : entries_)
+    if (e.vendor == vendor)
+      items.push_back(&e);
+  buildPlugins(std::move(items), false);
+  showPluginColumn();
+}
+
+// Every word must appear in the plugin's name or vendor (any order, any case).
+void EffectMenu::search(const juce::String& query) {
+  results_.clear();
+  if (query.isEmpty()) {
+    if (vendor_.isNotEmpty())
+      pickVendor(vendor_);
+    else
+      hidePluginColumn();
+    return;
+  }
+  const auto words = juce::StringArray::fromTokens(query, " ", "");
+  for (const auto& e : entries_) {
+    const auto haystack = e.name + " " + e.vendor;
+    if (std::all_of(words.begin(), words.end(),
+                    [&](const juce::String& w) { return w.isEmpty() || haystack.containsIgnoreCase(w); }))
+      results_.push_back(&e);
+  }
+  std::sort(results_.begin(), results_.end(), [](const Entry* a, const Entry* b) {
+    return a->name.compareIgnoreCase(b->name) < 0;
+  });
+  buildPlugins(results_, true);
+  showPluginColumn();
+}
+
+void EffectMenu::hidePluginColumn() {
+  if (!rightShown_)
+    return;
+  rightShown_ = false;
+  rightColumn_.setVisible(false);
+  frost_.setVisible(false);
+  const int centreX = getX() + getWidth() / 2;
+  setSize(2 * (kBorder + kPad) + kLeftW, getHeight());
+  placeClamped(centreX - getWidth() / 2, getY());
+}
+
+void EffectMenu::showPluginColumn() {
+  if (rightShown_)
+    return;
   rightShown_ = true;
   const int centreX = getX() + getWidth() / 2;  // keep the panel centred as it widens
-  setSize(2 * (kBorder + kPad) + kLeftW + kRightW, 2 * (kBorder + kPad) + kHeight);
+  setSize(2 * (kBorder + kPad) + kLeftW + kRightW, getHeight());
   rightColumn_.setVisible(true);
 
   // Blur the (now in the background) vendor column. Snapshot before revealing the

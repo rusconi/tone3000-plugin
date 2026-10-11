@@ -58,6 +58,7 @@ target_sources(DspTests PRIVATE
     ../plugin/src/Processor.cpp
     ../plugin/src/ProcessorChain.cpp
     ../plugin/src/ProcessorHistory.cpp
+    ../plugin/src/ProcessorHostedEffects.cpp
     ../plugin/src/ProcessorModelLoader.cpp
     ../plugin/src/ProcessorPresets.cpp
     ../plugin/src/ProcessorState.cpp

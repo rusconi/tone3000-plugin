@@ -1,6 +1,7 @@
 // Captures the on-screen pixels of a component's window. A JUCE component
 // snapshot renders nothing for plugins whose editor is a native (Metal/AppKit)
-// view, so effect-slot thumbnails use this instead. macOS only.
+// view, so effect-slot thumbnails use this instead. macOS (WindowCapture.mm)
+// and Linux/X11 (WindowCapture.cpp); elsewhere it returns an empty image.
 #pragma once
 
 #include <juce_gui_basics/juce_gui_basics.h>
