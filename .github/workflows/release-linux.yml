@@ -1,0 +1,152 @@
+# Release (Linux): builds x64 and aarch64 (standalone, VST3, LV2, CLAP, with
+# hosted VST3/LV2 effects), runs the DSP tests and publishes the tarballs as a
+# GitHub Release tagged v<VERSION>-linux. Manual only (Actions -> Release
+# (Linux) -> Run workflow); re-running at the same VERSION replaces the
+# release's files. The tag is created with the workflow token, which by
+# GitHub's rules triggers no other workflow.
+#
+# Builds use the fork's namespaced identities (TONE3000 FX, see
+# cmake/ForkIdentity.cmake), so they install next to an official TONE3000.
+name: Release (Linux)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: linux-release
+
+env:
+  BUILD_TYPE: Release
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runs-on }}
+    strategy:
+      matrix:
+        include:
+          - name: Linux x64
+            runs-on: ubuntu-24.04
+            arch: x64
+          - name: Linux aarch64
+            runs-on: ubuntu-24.04-arm
+            arch: aarch64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Submodules separately, with retries: Eigen (inside the NAM submodules)
+      # is fetched from GitLab, which now and then refuses requests under load.
+      - name: Fetch submodules
+        run: |
+          for attempt in 1 2 3 4; do
+            git submodule update --init --recursive --jobs 4 && exit 0
+            echo "::warning::submodule fetch failed (attempt $attempt), retrying"
+            sleep $((attempt * 30))
+          done
+          exit 1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake pkg-config \
+            libgtk-3-dev libasound2-dev libjack-jackd2-dev libcurl4-openssl-dev \
+            libfreetype6-dev libfontconfig1-dev \
+            libx11-dev libxcomposite-dev libxcursor-dev libxext-dev \
+            libxi-dev libxinerama-dev libxrandr-dev libxrender-dev
+
+      # CPM fetches JUCE and the other packages into libs/ (the JUCE XEmbed
+      # fix in script/patch_juce_xembed.sh is reapplied on every configure).
+      - name: Cache fetched packages
+        uses: actions/cache@v4
+        with:
+          path: libs
+          key: cpm-${{ runner.os }}-${{ matrix.arch }}-${{ hashFiles('CMakeLists.txt', 'cmake/**') }}
+
+      # Keyless: users paste their own key in Plugin Settings.
+      - name: Write empty build key (.env)
+        run: printf 'T3K_PUBLISHABLE_KEY=\n' > .env
+
+      - name: Configure
+        run: |
+          cmake -B build -S . \
+            -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+            -DCMAKE_TOOLCHAIN_FILE=cmake/linux-toolchain.cmake \
+            -DBUILD_AAX=OFF \
+            -DT3K_FORK_NAMESPACED=ON
+
+      # A bare --parallel is an unbounded `make -j`: hundreds of JUCE compiles
+      # at once run the runner out of memory (the job dies with exit 143).
+      - name: Build
+        run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel "$(nproc)"
+
+      - name: Run DSP tests
+        run: ctest --test-dir build/test --output-on-failure
+
+      - name: Package
+        run: |
+          set -euo pipefail
+          VERSION="$(tr -d '[:space:]' < VERSION)"
+          PKG="TONE3000-FX-${VERSION}-linux-${{ matrix.arch }}"
+          ARTEFACTS="build/plugin/TONE3000_artefacts/${{ env.BUILD_TYPE }}"
+          mkdir -p "build/$PKG"
+          cp -r "$ARTEFACTS"/VST3/*.vst3 "$ARTEFACTS"/LV2/*.lv2 "$ARTEFACTS"/CLAP/*.clap "build/$PKG/"
+          cp "$ARTEFACTS"/Standalone/* "build/$PKG/"
+          cp LICENSE "build/$PKG/"
+          tar -czf "build/$PKG.tar.gz" -C build "$PKG"
+          echo "PKG=$PKG" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.PKG }}
+          path: build/${{ env.PKG }}.tar.gz
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        run: echo "T3K_VERSION=$(tr -d '[:space:]' < VERSION)" >> "$GITHUB_ENV"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: TONE3000-FX-*-linux-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.T3K_VERSION }}-linux
+          target_commitish: ${{ github.sha }}
+          name: TONE3000 FX ${{ env.T3K_VERSION }} — Linux (hosted VST3/LV2 effects)
+          files: dist/*.tar.gz
+          fail_on_unmatched_files: true
+          body: |
+            TONE3000 with hosted **VST3 and LV2 effects** in the chain, for Linux (x64 and aarch64).
+            The base app is [TONE3000](https://github.com/tone-3000/tone3000-plugin) by the TONE3000 team;
+            the hosted-effects feature was started by [@zackyusof](https://github.com/zackyusof) and is
+            extended for Linux in this fork.
+
+            **Downloads**
+            - `TONE3000-FX-${{ env.T3K_VERSION }}-linux-x64.tar.gz` — x86-64
+            - `TONE3000-FX-${{ env.T3K_VERSION }}-linux-aarch64.tar.gz` — ARM64
+
+            **Install**: unpack, then copy `TONE3000-FX.vst3` to `~/.vst3`, `TONE3000-FX.lv2` to `~/.lv2`,
+            `TONE3000-FX.clap` to `~/.clap`, or run the standalone app straight from the folder.
+            These builds are named **TONE3000 FX** and keep their data in `~/.config/TONE3000-FX`, so
+            they install next to an official TONE3000 without replacing it.
+
+            **First run**: open Plugin Settings and paste your free publishable API key from
+            [tone3000.com/settings](https://www.tone3000.com/settings); builds ship without a key.
+
+            **Hosted effects**: right-click an empty `+` slot → *Add VST3/LV2 Effect*. Native Linux
+            VST3 (`~/.vst3`, `/usr/lib/vst3`, `/usr/local/lib/vst3`) and LV2 (`~/.lv2`, `/usr/lib/lv2`,
+            `/usr/local/lib/lv2`) plugins are listed; Windows plugins need yabridge.
