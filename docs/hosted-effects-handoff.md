@@ -127,12 +127,14 @@ Build #1 shipped with an **empty** key, so the app surfaced *"TONE3000 publishab
 Set T3K_PUBLISHABLE_KEY at build time."* The key is read at **configure** time (`plugin/ui/NativeUi.cmake`
 → `build/t3k_ui/T3kConfig.h`), so it must exist **before** configuring. Fix applied:
 
-- Wrote `repo/.env` (gitignored): `T3K_PUBLISHABLE_KEY=t3k_pub__B8V_QGmV50ov2YWJzjqOxQE0q1-wURs`
-  (`.env.local` overrides `.env`; a configure-env var overrides both).
+- Wrote `repo/.env` (gitignored): `T3K_PUBLISHABLE_KEY=<own key from tone3000.com/settings>`
+  (`.env.local` overrides `.env`; a configure-env var overrides both). Public builds must use
+  the fork's own key — never bake the official app's client_id into distributed binaries.
 - Reconfigured (`cmake -S "$REPO" -B "$REPO/build"`) → `T3kConfig.h` regenerated with the key → rebuilt.
 
-The value is the app's OAuth **client_id** (publishable, not a secret) and was recovered from the
-installed official app:
+The value is an OAuth **client_id** (publishable, not a secret): generate one at
+tone3000.com/settings for anything you distribute. For a strictly personal build, the official
+app's key can be read back from your own install instead:
 
 ```
 grep -aoE "t3k_pub_[A-Za-z0-9_-]{8,}" /Applications/TONE3000.app/Contents/MacOS/TONE3000
