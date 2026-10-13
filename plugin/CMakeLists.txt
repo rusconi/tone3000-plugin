@@ -36,7 +36,7 @@ endif()
 project(TONE3000 VERSION ${T3K_VERSION})   # Set version of the plugin
 
 # Fork distribution identity. cmake/ForkIdentity.cmake exists ONLY in the fork
-# (zackyusof/tone3000-plugin-effects); upstream this include is a no-op and
+# (greblus/tone3000-plugin); upstream this include is a no-op and
 # the defaults below — the upstream values — apply, keeping local builds and
 # pull requests back to tone-3000/tone3000-plugin identical. Public releases
 # configure with -DT3K_FORK_NAMESPACED=ON (see that file) so installed

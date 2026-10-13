@@ -1,5 +1,5 @@
 # Fork distribution identity — THIS FILE EXISTS ONLY IN THE FORK
-# (zackyusof/tone3000-plugin-effects). Upstream has no such file, so the
+# (greblus/tone3000-plugin). Upstream has no such file, so the
 # OPTIONAL include in plugin/CMakeLists.txt is a no-op there and every
 # default below (the upstream values) applies.
 #
@@ -16,7 +16,11 @@
 #      as compatibility contracts. Keep them identical there.
 #   2. PUBLIC RELEASES: configure with -DT3K_FORK_NAMESPACED=ON. Ships under
 #      the fork identities below, which coexist with official installs.
-#      Our GitHub release workflow and build_tone3000.py --namespaced use it.
+#      Our GitHub release workflow (release-linux.yml) uses it.
+#
+# The hosted-effects work was started in zackyusof/tone3000-plugin-effects,
+# which shipped macOS builds as ZYUSOF / ZYUS / zyusof.net; this fork ships its
+# own values below (set before its first release) so the two never collide.
 #
 # STABILITY: never change the fork values once released — hosts key existing
 # sessions and presets by them, exactly like the upstream rule. The DAW state
@@ -36,13 +40,13 @@ set(T3K_FORK_PRODUCT_NAME "TONE3000-FX"
   CACHE STRING "Fork bundle/file name (no spaces: .component/.vst3/.app)")
 set(T3K_FORK_PLUGIN_CODE "T3KX"
   CACHE STRING "Fork plugin type code, 4 chars (AU type + VST3/AAX UID seed)")
-set(T3K_FORK_MANUFACTURER_CODE "ZYUS"
+set(T3K_FORK_MANUFACTURER_CODE "GRBL"
   CACHE STRING "Fork manufacturer code, 4 chars")
-set(T3K_FORK_COMPANY_NAME "ZYUSOF"
+set(T3K_FORK_COMPANY_NAME "greblus"
   CACHE STRING "Fork vendor name (host menus, bundle IDs)")
-set(T3K_FORK_LV2_URI "https://www.zyusof.net/tone3000-fx"
+set(T3K_FORK_LV2_URI "https://github.com/greblus/tone3000-plugin"
   CACHE STRING "Fork LV2 URI (permanent once released)")
-set(T3K_FORK_CLAP_ID "net.zyusof.tone3000-fx"
+set(T3K_FORK_CLAP_ID "io.github.greblus.tone3000-fx"
   CACHE STRING "Fork CLAP ID (permanent once released)")
 set(T3K_FORK_DATA_DIR "TONE3000-FX"
   CACHE STRING "Fork app-data folder name (presets, settings, logs, models)")
