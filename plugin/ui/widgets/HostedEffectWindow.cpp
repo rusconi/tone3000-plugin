@@ -85,13 +85,16 @@ private:
 // After it has painted once it snapshots the editor as the slot's static graphic.
 class HostedEffectWindow : public juce::DocumentWindow, private juce::Timer {
 public:
+  // `pluginPath` is the block's stored plugin path / URI, the same one the
+  // tile looks the graphic up by. Not the instance's own description: for a
+  // VST3 that names the binary inside the bundle, not the bundle.
   HostedEffectWindow(std::shared_ptr<juce::AudioPluginInstance> instance,
-                     const juce::String& name, std::string blockId)
+                     const juce::String& name, std::string blockId, const juce::String& pluginPath)
       : juce::DocumentWindow(name, juce::Colours::darkgrey,
                              juce::DocumentWindow::closeButton),
         instance_(std::move(instance)),
         blockId_(std::move(blockId)),
-        pluginKey_(pluginGraphicKey(instance_->getPluginDescription().fileOrIdentifier, name)) {
+        pluginKey_(pluginGraphicKey(pluginPath, name)) {
     setUsingNativeTitleBar(true);
     if (auto* editor = instance_->createEditorAndMakeActive()) {
       setContentOwned(new EditorHolder(editor), true);
@@ -165,7 +168,7 @@ juce::Image hostedEffectGraphic(const std::string& blockId, const juce::String& 
 juce::ChangeBroadcaster& hostedEffectGraphics() { return graphicBroadcaster(); }
 
 bool openHostedEffectEditor(Services& services, const std::string& blockId,
-                            const juce::String& name) {
+                            const juce::String& name, const juce::String& pluginPath) {
   auto instance = services.backend.hostedEffectInstance(blockId);
   if (instance == nullptr)
     return false;
@@ -176,7 +179,7 @@ bool openHostedEffectEditor(Services& services, const std::string& blockId,
       window->toFront(true);
       return true;
     }
-  new HostedEffectWindow(std::move(instance), name, blockId);
+  new HostedEffectWindow(std::move(instance), name, blockId, pluginPath);
   return true;
 }
 

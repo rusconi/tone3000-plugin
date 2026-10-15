@@ -13,8 +13,9 @@ namespace t3k::ui {
 
 // Opens `blockId`'s hosted effect editor. Returns false when the block has no
 // loaded instance (e.g. its plugin is missing) — the caller shows a message.
+// `name` and `pluginPath` (the block's plugin path / URI) key the saved graphic.
 bool openHostedEffectEditor(Services& services, const std::string& blockId,
-                            const juce::String& name);
+                            const juce::String& name, const juce::String& pluginPath);
 
 // Static graphic for an effect block: the plugin's own GUI captured while its
 // editor window was open (so the slot can show what's loaded). The last capture

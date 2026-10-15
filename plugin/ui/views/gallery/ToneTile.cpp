@@ -118,7 +118,7 @@ void ToneTile::togglePower() {
 
 void ToneTile::open() {
   if (block_.isEffect) {
-    if (!openHostedEffectEditor(services(), blockId(), block_.tone.title))
+    if (!openHostedEffectEditor(services(), blockId(), block_.tone.title, juce::String(block_.effectPath)))
       services().toast.show("Effect is missing; reinstall it to restore this block");
     return;
   }
