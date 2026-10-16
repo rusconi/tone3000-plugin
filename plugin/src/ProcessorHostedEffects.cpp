@@ -26,6 +26,39 @@ bool parseDescription(const juce::String& xml, juce::PluginDescription& descript
          !description.isInstrument;
 }
 
+// The chain feeds and reads only a plugin's main buses. Some plugins start
+// with the main bus disabled (0 channels), others with a sidechain or extra
+// output bus enabled, which counts towards the total channels; both failed
+// the 1–2 channel check below. Ask for the main buses only, enabled (their
+// default layout, stereo when that is wider than 2 channels or empty); if the
+// plugin refuses that layout it keeps its own and the check decides.
+void useMainBusesOnly(juce::AudioPluginInstance& instance) {
+  auto layout = instance.getBusesLayout();
+  bool changed = false;
+  for (const bool isInput : {true, false}) {
+    auto& sets = isInput ? layout.inputBuses : layout.outputBuses;
+    for (int i = 0; i < sets.size(); ++i) {
+      auto& set = sets.getReference(i);
+      if (i > 0) {
+        if (!set.isDisabled()) {
+          set = juce::AudioChannelSet::disabled();
+          changed = true;
+        }
+      } else if (set.isDisabled()) {
+        auto mainSet = juce::AudioChannelSet::stereo();
+        if (const auto* bus = instance.getBus(isInput, 0))
+          if (const auto preferred = bus->getDefaultLayout(); !preferred.isDisabled() && preferred.size() <= 2)
+            mainSet = preferred;
+        set = mainSet;
+        changed = true;
+      }
+    }
+  }
+  if (changed && !instance.setBusesLayout(layout))
+    juce::Logger::writeToLog("[Hosted effect] " + instance.getName() +
+                             ": refused the main-bus layout, keeping its own");
+}
+
 std::shared_ptr<juce::AudioPluginInstance> instantiateEffect(
     const juce::String& xml, const juce::MemoryBlock& state, double rate, int blockSize) {
   juce::PluginDescription description;
@@ -39,11 +72,14 @@ std::shared_ptr<juce::AudioPluginInstance> instantiateEffect(
     juce::Logger::writeToLog("[Hosted effect] " + description.name + ": " + error);
     return {};
   }
+  useMainBusesOnly(*instance);
   if (instance->getTotalNumInputChannels() < 1 ||
       instance->getTotalNumInputChannels() > 2 ||
       instance->getTotalNumOutputChannels() < 1 ||
       instance->getTotalNumOutputChannels() > 2) {
-    juce::Logger::writeToLog("[Hosted effect] Unsupported channel layout: " + description.name);
+    juce::Logger::writeToLog("[Hosted effect] Unsupported channel layout: " + description.name + " (" +
+                             juce::String(instance->getTotalNumInputChannels()) + " in, " +
+                             juce::String(instance->getTotalNumOutputChannels()) + " out)");
     return {};
   }
   instance->setRateAndBufferSizeDetails(rate, blockSize);
