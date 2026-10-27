@@ -1,6 +1,9 @@
 #include "NativeEditor.h"
 
 #include "core/Fonts.h"
+#if JUCE_LINUX || JUCE_BSD
+#include "core/LinuxBackend.h"
+#endif
 
 namespace t3k::ui {
 
@@ -42,6 +45,10 @@ NativeEditor::Trace::Trace(const TONE3000Processor& processor) {
   }
   line << " | displays " << displays.displays.size()
        << " | globalScale " << formatScale(juce::Desktop::getInstance().getGlobalScaleFactor());
+#if JUCE_LINUX || JUCE_BSD
+  line << " | backend " << (linuxbackend::usingWaylandDisplay() ? "wayland" : "X11")
+       << " (WAYLAND_DISPLAY=" << juce::SystemStats::getEnvironmentVariable("WAYLAND_DISPLAY", "<unset>") << ")";
+#endif
   trace(line);
 }
 
@@ -125,7 +132,11 @@ double NativeEditor::maxStartScale() const {
   // Fit the standalone window into the primary display's usable area, with
   // headroom for the native title bar (GitHub issue #43; Mutter's 2x title
   // bar is 37 logical px). Floor at 1.0: the design box is the hard minimum.
+#if defined(T3K_TOUCH_UI) && T3K_TOUCH_UI
+  constexpr int titleBarAllowance = 0;
+#else
   constexpr int titleBarAllowance = 40;
+#endif
   const double fitW = display->userBounds.getWidth() / static_cast<double>(design::kWidth);
   const double fitH =
       (display->userBounds.getHeight() - titleBarAllowance) / static_cast<double>(designHeight());
@@ -182,6 +193,10 @@ void NativeEditor::setExtraContentHeight(int total, int persistent) {
 void NativeEditor::fitRoot() {
   const double byWidth = getWidth() / static_cast<double>(design::kWidth);
   const double byHeight = getHeight() / static_cast<double>(designHeight());
+#if JUCE_IOS || (defined(T3K_TOUCH_UI) && T3K_TOUCH_UI)
+  // In kiosk mode, always fit within the available screen area so nothing clips.
+  double scale = juce::jmin(byWidth, byHeight);
+#else
   double scale = byWidth;
   if (byHeight < byWidth - 1e-6) {
     // The box is taller than the window allows. Hold the width-driven scale
@@ -197,13 +212,13 @@ void NativeEditor::fitRoot() {
   } else {
     stopTimer();
   }
+#endif
   scale = juce::jmax(0.05, scale);
   root_.setTransform(juce::AffineTransform::scale(static_cast<float>(scale)));
   services_.zoom.set(scale);
-  // Top-anchored, horizontally centred. iOS centres vertically too: its
-  // window never resizes, so nothing can jump.
+  // Top-anchored, horizontally centred. iOS and Touch Kiosk centre vertically too.
   const int x = juce::roundToInt((getWidth() - design::kWidth * scale) / 2);
-#if JUCE_IOS
+#if JUCE_IOS || (defined(T3K_TOUCH_UI) && T3K_TOUCH_UI)
   const int y = juce::jmax(0, juce::roundToInt((getHeight() - designHeight() * scale) / 2));
 #else
   const int y = 0;

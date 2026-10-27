@@ -1,3 +1,7 @@
 # Preset files are magic-prefixed binary ValueTree streams; never diff,
 # merge, or EOL-convert them.
 *.t3kpreset binary
+
+# Shell scripts and Linux kiosk executables must retain LF line endings
+*.sh text eol=lf
+script/installer/linux/tone3000-autostart text eol=lf

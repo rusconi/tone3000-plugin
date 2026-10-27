@@ -64,7 +64,9 @@ public:
   // into view with `margin` pixels to spare along the axis; nothing when it
   // already is (scrollIntoViewIfNeeded). A target inside a nested scroller
   // counts by that scroller's frame, which is where it will show.
-  void reveal(const juce::Component& target, int margin);
+  // `bottomInset` (vertical scrollers only) keeps the target above a
+  // bottom-covering overlay such as the on-screen keyboard.
+  void reveal(const juce::Component& target, int margin, int bottomInset = 0);
 
   // Room kept around a control the keyboard focuses when the view scrolls
   // to it (a field's label above it, the next row below). Default none.

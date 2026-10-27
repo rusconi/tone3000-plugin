@@ -1,0 +1,104 @@
+#!/bin/sh
+# Launch TONE3000 inside a labwc (Wayland) kiosk session.
+#
+# Installed next to the TONE3000 binary by `install.sh --kiosk`. It is safe to
+# run by hand; a lock file keeps it to one supervisor per session.
+#
+# Environment:
+#   T3K_APP            app binary (default: TONE3000 next to this script)
+#   T3K_AUDIO_DEVICE   ALSA card name to wait for (default: MOTU M2;
+#                      set empty to skip the device-specific waits)
+#   T3K_OSK_HEIGHT     on-screen keyboard inset in design px (default: 220)
+
+set -u
+
+SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+APP="${T3K_APP:-$SELF_DIR/TONE3000}"
+[ -x "$APP" ] || APP="$HOME/.local/bin/TONE3000"
+DEVICE="${T3K_AUDIO_DEVICE:-MOTU M2}"
+STATE="$HOME/.local/state/tone3000"
+OUT="$STATE/app.out"
+LOG="$STATE/autostart.log"
+
+mkdir -p "$STATE"
+log() { printf '%s %s\n' "$(date -Is)" "$*" >>"$LOG"; }
+
+# Single supervisor per session
+exec 9>"$STATE/autostart.lock"
+flock -n 9 || { log "another supervisor is already running"; exit 0; }
+
+if [ -z "${WAYLAND_DISPLAY:-}" ]; then
+    log "WAYLAND_DISPLAY is not set; refusing to start"
+    exit 1
+fi
+
+# squeekboard overlays the bottom of the panel instead of resizing the window;
+# the UI scrolls a focused text field above this band (design px, scale 1).
+export T3K_OSK_HEIGHT="${T3K_OSK_HEIGHT:-220}"
+
+if pgrep -x TONE3000 >/dev/null; then
+    log "TONE3000 already running; not starting another"
+    exit 0
+fi
+
+card_index=""
+if [ -n "$DEVICE" ]; then
+    # 1. Wait for the USB interface to enumerate (max 30 s).
+    i=0
+    while [ "$i" -lt 30 ]; do
+        grep -qiF -- "$DEVICE" /proc/asound/cards 2>/dev/null && break
+        i=$((i + 1))
+        sleep 1
+    done
+    [ "$i" -ge 30 ] && log "warning: $DEVICE not enumerated after 30 s"
+
+    # 2. Let PipeWire/WirePlumber finish probing and suspend the card
+    #    (WirePlumber's idle-suspend default is 5 s).
+    sleep 5
+
+    # 3. Resolve the card index dynamically, then wait until nothing else owns
+    #    its playback or capture PCM. A card's name often lives on the
+    #    continuation line below the numbered header, so remember the last
+    #    index and report it when the name matches either line.
+    card_index=$(awk -v dev="$DEVICE" '
+        /^[[:space:]]*[0-9]+ \[/ {
+            idx = $1
+            if (index(tolower($0), tolower(dev))) { print idx; exit }
+            next
+        }
+        idx != "" && index(tolower($0), tolower(dev)) { print idx; exit }
+    ' /proc/asound/cards 2>/dev/null || true)
+
+    if [ -n "$card_index" ]; then
+        i=0
+        while [ "$i" -lt 20 ]; do
+            busy=0
+            for pcm in pcm0p pcm0c; do
+                if grep -q 'owner_pid' \
+                    "/proc/asound/card$card_index/$pcm/sub0/status" 2>/dev/null; then
+                    busy=1
+                fi
+            done
+            [ "$busy" -eq 0 ] && break
+            i=$((i + 1))
+            sleep 1
+        done
+        [ "$i" -ge 20 ] && log "warning: ALSA card $card_index still busy after 20 s"
+    else
+        log "warning: could not resolve the $DEVICE card index; skipping busy check"
+    fi
+fi
+
+cd "$HOME" || exit 1
+
+# 4. Run; restart only after a crash. Clean exit (user quit) ends the
+#    loop, and logout (labwc gone) stops any further respawns.
+while :; do
+    log "starting TONE3000"
+    "$APP" >>"$OUT" 2>&1
+    rc=$?
+    log "TONE3000 exited with status $rc"
+    [ "$rc" -eq 0 ] && break
+    sleep 1
+done
+

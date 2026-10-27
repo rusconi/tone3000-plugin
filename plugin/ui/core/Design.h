@@ -16,8 +16,17 @@ namespace t3k::ui::design {
 inline int snap(float v) { return static_cast<int>(std::lround(v)); }
 
 inline constexpr int kWidth = 1024;
+#if defined(T3K_TOUCH_UI) && T3K_TOUCH_UI
+// Kiosk build: default to 16:9 ratio (576 px, so 1024x576 at 1.25x fills a 1280x720 display).
+// Can be customized at build time via -DT3K_DESIGN_HEIGHT=... (e.g. 600 for 1024x600 displays).
+#ifndef T3K_DESIGN_HEIGHT
+#define T3K_DESIGN_HEIGHT 576
+#endif
+inline constexpr int kHeight = T3K_DESIGN_HEIGHT;
+#else
 // Core UI height (content only; Figma's 600 includes a 22px mock title bar).
 inline constexpr int kHeight = 578;
+#endif
 
 // Chrome strips that grow the window instead of squishing the core.
 inline constexpr int kBannerHeight = 44;   // AppBanner.tsx
@@ -39,7 +48,9 @@ inline constexpr bool kIos = true;
 inline constexpr bool kIos = false;
 #endif
 
-#if defined(T3K_UI_COARSE_POINTER)
+#if defined(T3K_TOUCH_UI) && T3K_TOUCH_UI
+inline constexpr bool kCoarsePointer = true;
+#elif defined(T3K_UI_COARSE_POINTER)
 inline constexpr bool kCoarsePointer = T3K_UI_COARSE_POINTER;
 #elif JUCE_IOS || JUCE_ANDROID
 inline constexpr bool kCoarsePointer = true;

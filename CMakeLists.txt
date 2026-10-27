@@ -53,6 +53,15 @@ endif()
 set(CMAKE_CXX_STANDARD 20)
 set(LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs)
 
+option(T3K_TOUCH_UI "Build for touchscreen kiosk display (coarse pointer, Wayland OSK)" OFF)
+set(T3K_DESIGN_HEIGHT "" CACHE STRING "Custom UI design canvas height (default 576 for 16:9 kiosk, 600 for 1024x600)")
+if (T3K_TOUCH_UI)
+    add_compile_definitions(T3K_TOUCH_UI=1 T3K_UI_COARSE_POINTER=1)
+    if (T3K_DESIGN_HEIGHT)
+        add_compile_definitions(T3K_DESIGN_HEIGHT=${T3K_DESIGN_HEIGHT})
+    endif()
+endif()
+
 # Windows: link the MSVC runtime statically (/MT). The plugin formats load
 # into host processes we don't control and the installer ships no vc_redist,
 # so a dynamically linked runtime fails on any machine without the VC++
@@ -146,10 +155,22 @@ if (UNIX AND NOT APPLE AND NOT HEADLESS)
 endif()
 
 # Download JUCE using CPM
+#
+# Pinned to the tip of JUCE's `wayland` preview branch (JUCE 9.0.5), which
+# adds the native Wayland backend and zwp_text_input_v3 support the Pi kiosk
+# needs. Pin the commit SHA, not the branch name: the preview branch is
+# rebased and force-pushed upstream, so a moving ref would make kiosk builds
+# irreproducible. Update deliberately, then re-audit the T3K_* source patches
+# below.
+#
+# Resolved 2026-10-21 from:
+#   git ls-remote https://github.com/juce-framework/JUCE refs/heads/wayland
+set(T3K_JUCE_GIT_TAG 641a713d3ae469830a0ca6dbd2eb21744244977a)
+set(T3K_JUCE_VERSION 9.0.5)
 CPMAddPackage(
     NAME JUCE
-    GIT_TAG 9.0.3
-    VERSION 9.0.3
+    GIT_TAG ${T3K_JUCE_GIT_TAG}
+    VERSION ${T3K_JUCE_VERSION}
     GITHUB_REPOSITORY juce-framework/JUCE
     SOURCE_DIR ${LIB_DIR}/juce
 )
@@ -158,12 +179,34 @@ CPMAddPackage(
 # resize callback on a deleted component; see script/patch_juce_xembed.sh.
 # Idempotent, so it simply runs on every configure.
 if (UNIX AND NOT APPLE)
-    execute_process(
-        COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/script/patch_juce_xembed.sh"
-                   "${LIB_DIR}/juce/modules/juce_gui_extra/native/juce_XEmbedComponent_linux.cpp"
-        RESULT_VARIABLE _t3k_xembed_patch)
-    if (NOT _t3k_xembed_patch EQUAL 0)
-        message(FATAL_ERROR "script/patch_juce_xembed.sh failed; JUCE may have changed")
+    set(_juce_xembed_cpp "${LIB_DIR}/juce/modules/juce_gui_extra/native/juce_XEmbedComponent_linux.cpp")
+    if (EXISTS "${_juce_xembed_cpp}")
+        file(READ "${_juce_xembed_cpp}" _juce_xembed_src)
+        if (NOT _juce_xembed_src MATCHES "safeOwner = Component::SafePointer")
+            if (_juce_xembed_src MATCHES "\r\n")
+                set(_juce_nl "\r\n")
+            else()
+                set(_juce_nl "\n")
+            endif()
+            set(_juce_xembed_old "                        MessageManager::callAsync ([this] { componentMovedOrResized (owner, true, true); });")
+            set(_juce_xembed_new
+[=[                        // Local fix: the component may be deleted before this runs.
+                        MessageManager::callAsync ([this, safeOwner = Component::SafePointer<Component> (&owner)]
+                        {
+                            if (safeOwner != nullptr)
+                                componentMovedOrResized (owner, true, true);
+                        });]=])
+            string(REPLACE "\n" "${_juce_nl}" _juce_xembed_new "${_juce_xembed_new}")
+            string(REPLACE "${_juce_xembed_old}" "${_juce_xembed_new}" _juce_xembed_src "${_juce_xembed_src}")
+            if (NOT _juce_xembed_src MATCHES "safeOwner = Component::SafePointer")
+                message(FATAL_ERROR
+                    "T3K_XEMBED_SAFE_OWNER: failed to patch ${_juce_xembed_cpp}. "
+                    "The JUCE source layout likely changed in this version. Update the patch "
+                    "anchors in CMakeLists.txt.")
+            endif()
+            file(WRITE "${_juce_xembed_cpp}" "${_juce_xembed_src}")
+            message(STATUS "Patched JUCE XEmbedComponent: safeOwner check prevents use-after-free on resize")
+        endif()
     endif()
 endif()
 
@@ -187,15 +230,18 @@ set(_juce_threads_mac "${LIB_DIR}/juce/modules/juce_core/native/juce_Threads_mac
 if (EXISTS "${_juce_threads_mac}")
     file(READ "${_juce_threads_mac}" _juce_threads_mac_src)
     if (NOT _juce_threads_mac_src MATCHES "T3K_RT_START_STALE_HANDLE")
-        string(REPLACE
-[=[    return threadId != nullptr
-        && threadData.started.get_future().get();]=]
+        if (_juce_threads_mac_src MATCHES "\r\n")
+            set(_juce_nl "\r\n")
+        else()
+            set(_juce_nl "\n")
+        endif()
+
+        set(_juce_threads_mac_new
 [=[    // T3K_RT_START_STALE_HANDLE: a failed realtime upgrade exits the
     // pthread before juce_threadEntryPoint, so closeThreadHandle() never
     // runs; clear the stale handle so this Thread can be restarted or
     // destroyed without stopThread() stalling on a dead thread.
-    const auto started = threadId != nullptr
-        && threadData.started.get_future().get();
+    const auto started = threadData.started.get_future().get();
 
     if (! started)
     {
@@ -203,16 +249,34 @@ if (EXISTS "${_juce_threads_mac}")
         threadId = {};
     }
 
-    return started;]=]
-            _juce_threads_mac_src "${_juce_threads_mac_src}")
-        if (NOT _juce_threads_mac_src MATCHES "T3K_RT_START_STALE_HANDLE")
-            message(FATAL_ERROR
-                "T3K_RT_START_STALE_HANDLE: failed to patch ${_juce_threads_mac}. "
-                "The JUCE source layout likely changed in this version. Update the patch "
-                "anchor in CMakeLists.txt.")
+    return started;]=])
+        string(REPLACE "\n" "${_juce_nl}" _juce_threads_mac_new "${_juce_threads_mac_new}")
+
+        set(_juce_threads_mac_old_905 "    return threadData.started.get_future().get();")
+        set(_juce_threads_mac_old_903
+"    return threadId != nullptr
+        && threadData.started.get_future().get();")
+        string(REPLACE "\n" "${_juce_nl}" _juce_threads_mac_old_903 "${_juce_threads_mac_old_903}")
+
+        if (_juce_threads_mac_src MATCHES "return threadData\\.started\\.get_future")
+            string(REPLACE "${_juce_threads_mac_old_905}" "${_juce_threads_mac_new}" _juce_threads_mac_src "${_juce_threads_mac_src}")
+        elseif (_juce_threads_mac_src MATCHES "threadId != nullptr")
+            string(REPLACE "${_juce_threads_mac_old_903}" "${_juce_threads_mac_new}" _juce_threads_mac_src "${_juce_threads_mac_src}")
         endif()
-        file(WRITE "${_juce_threads_mac}" "${_juce_threads_mac_src}")
-        message(STATUS "Patched JUCE Thread (macOS): stale handle cleared when realtime start fails")
+
+        if (NOT _juce_threads_mac_src MATCHES "T3K_RT_START_STALE_HANDLE")
+            if (APPLE)
+                message(FATAL_ERROR
+                    "T3K_RT_START_STALE_HANDLE: failed to patch ${_juce_threads_mac}. "
+                    "The JUCE source layout likely changed in this version. Update the patch "
+                    "anchor in CMakeLists.txt.")
+            else()
+                message(STATUS "Skipped T3K_RT_START_STALE_HANDLE patch (macOS-only file on non-Apple platform)")
+            endif()
+        else()
+            file(WRITE "${_juce_threads_mac}" "${_juce_threads_mac_src}")
+            message(STATUS "Patched JUCE Thread (macOS): stale handle cleared when realtime start fails")
+        endif()
     endif()
 endif()
 
@@ -473,52 +537,11 @@ if (EXISTS "${_juce_adm_cpp}")
     endif()
 endif()
 
-# T3K_ALSA_CLOSE_STUCK_TIMEOUT: ALSAThread::close() waits a fixed 400ms for
-# the audio thread to exit before deciding it's stuck and force-closing the
-# ALSA handles from the message thread (closeNow(), i.e. snd_pcm_close while
-# the audio thread may still be inside snd_pcm_readi/writei). A single i/o
-# period longer than 400ms - a large buffer at a low sample rate - is then
-# indistinguishable from "stuck", and the forced close frees the pcm (and the
-# input/output buffers backing the callback's channel pointers) out from
-# under a thread that's still using them: reliably a use-after-free on any
-# device reconfiguration. Confirmed live with gdb: closeNow() fires on
-# ordinary channel-selection changes with numCallbacks == callbacksToStop
-# (no callback landed during the wait - the thread was mid-read, not
-# wedged), matching this fix exactly. Matches upstream JUCE PR
-# https://github.com/juce-framework/JUCE/pull/1707 (unmerged as of this
-# writing); drop this patch once it lands. Idempotent configure-time patch,
-# same rationale as the patches above.
-set(_juce_alsa_cpp "${LIB_DIR}/juce/modules/juce_audio_devices/native/juce_ALSA_linux.cpp")
-if (EXISTS "${_juce_alsa_cpp}")
-    file(READ "${_juce_alsa_cpp}" _juce_alsa_src)
-    if (NOT _juce_alsa_src MATCHES "T3K_ALSA_CLOSE_STUCK_TIMEOUT")
-        set(_juce_alsa_old
-[=[            const int callbacksToStop = numCallbacks;
-
-            if ((! waitForThreadToExit (400)) && audioIoInProgress && numCallbacks == callbacksToStop)]=])
-        set(_juce_alsa_new
-[=[            const int callbacksToStop = numCallbacks;
-
-            // T3K_ALSA_CLOSE_STUCK_TIMEOUT: a fixed 400ms wait can't tell a
-            // stuck thread from one that's simply mid-read on a large
-            // buffer/low sample rate combination (a 4096-sample buffer at
-            // 8kHz is a 512ms period), so scale the wait by one i/o period,
-            // capped so a genuinely wedged device still closes promptly.
-            const auto ioPeriodMs = sampleRate > 0.0 ? (int) (1000.0 * bufferSize / sampleRate) : 0;
-            const auto stuckTimeoutMs = 400 + jmin (2000, ioPeriodMs);
-
-            if ((! waitForThreadToExit (stuckTimeoutMs)) && audioIoInProgress && numCallbacks == callbacksToStop)]=])
-        string(REPLACE "${_juce_alsa_old}" "${_juce_alsa_new}" _juce_alsa_src "${_juce_alsa_src}")
-        if (NOT _juce_alsa_src MATCHES "T3K_ALSA_CLOSE_STUCK_TIMEOUT")
-            message(FATAL_ERROR
-                "T3K_ALSA_CLOSE_STUCK_TIMEOUT: failed to patch ${_juce_alsa_cpp}. "
-                "The JUCE source layout likely changed in this version. Update the patch "
-                "anchors in CMakeLists.txt.")
-        endif()
-        file(WRITE "${_juce_alsa_cpp}" "${_juce_alsa_src}")
-        message(STATUS "Patched JUCE ALSAThread: scale the stuck-thread close timeout by the i/o period")
-    endif()
-endif()
+# T3K_ALSA_CLOSE_STUCK_TIMEOUT: OBSOLETE in JUCE 9.0.5+.
+# Upstream PR 1707 now uses `audioCallbackTimeoutMs` instead of a fixed
+# 400ms timeout, and scales it by the i/o buffer period. This patch was for
+# earlier versions that didn't have that fix; drop it to avoid configure
+# failures when the anchor is missing in newer JUCE releases.
 
 # T3K_CALLBACK_ENFORCER_NULL_SAFE: CallbackMaxSizeEnforcer sizes its stored
 # channel vectors from the device's active-channel bitsets in
@@ -740,18 +763,17 @@ endif()
 # Idempotent configure-time patch, same rationale as the patches above;
 # applied on every platform (the file only compiles on Linux, patching it
 # elsewhere is harmless and keeps the libs/juce tree identical everywhere).
-# The file ships with CRLF line endings; file(READ) normalizes them to LF,
-# so the anchor matches as written and the patched file is written back
-# LF-only.
+# Preserve whatever line ending JUCE shipped with (CRLF on some checkouts).
 set(_juce_x11_cpp "${LIB_DIR}/juce/modules/juce_gui_basics/native/juce_XWindowSystem_linux.cpp")
 if (EXISTS "${_juce_x11_cpp}")
     file(READ "${_juce_x11_cpp}" _juce_x11_src)
     if (NOT _juce_x11_src MATCHES "T3K_X11_HINT_OVERFLOW")
-        set(_juce_x11_hints_old
-[=[            hints->min_width  = jmax (1, (int) (factor * c->getMinimumWidth())  - leftAndRight);
-            hints->max_width  = jmax (1, (int) (factor * c->getMaximumWidth())  - leftAndRight);
-            hints->min_height = jmax (1, (int) (factor * c->getMinimumHeight()) - topAndBottom);
-            hints->max_height = jmax (1, (int) (factor * c->getMaximumHeight()) - topAndBottom);]=])
+        if (_juce_x11_src MATCHES "\r\n")
+            set(_juce_nl "\r\n")
+        else()
+            set(_juce_nl "\n")
+        endif()
+
         set(_juce_x11_hints_new
 [=[            // T3K_X11_HINT_OVERFLOW (see the CMakeLists patch comment): the
             // standalone's unset constrainer maximums (0x3FFFFFFF) times a 2x
@@ -766,15 +788,39 @@ if (EXISTS "${_juce_x11_cpp}")
             hints->max_width  = boundedHint (factor * c->getMaximumWidth()  - leftAndRight);
             hints->min_height = boundedHint (factor * c->getMinimumHeight() - topAndBottom);
             hints->max_height = boundedHint (factor * c->getMaximumHeight() - topAndBottom);]=])
-        string(REPLACE "${_juce_x11_hints_old}" "${_juce_x11_hints_new}" _juce_x11_src "${_juce_x11_src}")
+        string(REPLACE "\n" "${_juce_nl}" _juce_x11_hints_new "${_juce_x11_hints_new}")
+
+        set(_juce_x11_hints_old_1space
+"            hints->min_width  = jmax (1, (int) (factor * c->getMinimumWidth()) - leftAndRight);
+            hints->max_width  = jmax (1, (int) (factor * c->getMaximumWidth()) - leftAndRight);
+            hints->min_height = jmax (1, (int) (factor * c->getMinimumHeight()) - topAndBottom);
+            hints->max_height = jmax (1, (int) (factor * c->getMaximumHeight()) - topAndBottom);")
+        string(REPLACE "\n" "${_juce_nl}" _juce_x11_hints_old_1space "${_juce_x11_hints_old_1space}")
+
+        set(_juce_x11_hints_old_2spaces
+"            hints->min_width  = jmax (1, (int) (factor * c->getMinimumWidth())  - leftAndRight);
+            hints->max_width  = jmax (1, (int) (factor * c->getMaximumWidth())  - leftAndRight);
+            hints->min_height = jmax (1, (int) (factor * c->getMinimumHeight()) - topAndBottom);
+            hints->max_height = jmax (1, (int) (factor * c->getMaximumHeight()) - topAndBottom);")
+        string(REPLACE "\n" "${_juce_nl}" _juce_x11_hints_old_2spaces "${_juce_x11_hints_old_2spaces}")
+
+        string(REPLACE "${_juce_x11_hints_old_1space}" "${_juce_x11_hints_new}" _juce_x11_src "${_juce_x11_src}")
+        string(REPLACE "${_juce_x11_hints_old_2spaces}" "${_juce_x11_hints_new}" _juce_x11_src "${_juce_x11_src}")
+
         if (NOT _juce_x11_src MATCHES "T3K_X11_HINT_OVERFLOW")
-            message(FATAL_ERROR
-                "T3K_X11_HINT_OVERFLOW: failed to patch ${_juce_x11_cpp}. "
-                "The JUCE source layout likely changed in this version. Update the patch "
-                "anchors in CMakeLists.txt.")
+            set(_juce_x11_pattern
+                "[ \t]*hints->min_width[ \t]*=[ \t]*[^\r\n;]*c->getMinimumWidth[^\r\n;]*;[\r\n]+[ \t]*hints->max_width[ \t]*=[ \t]*[^\r\n;]*c->getMaximumWidth[^\r\n;]*;[\r\n]+[ \t]*hints->min_height[ \t]*=[ \t]*[^\r\n;]*c->getMinimumHeight[^\r\n;]*;[\r\n]+[ \t]*hints->max_height[ \t]*=[ \t]*[^\r\n;]*c->getMaximumHeight[^\r\n;]*;")
+            string(REGEX REPLACE "${_juce_x11_pattern}" "${_juce_x11_hints_new}" _juce_x11_src "${_juce_x11_src}")
         endif()
-        file(WRITE "${_juce_x11_cpp}" "${_juce_x11_src}")
-        message(STATUS "Patched JUCE XWindowSystem: WM size hints bounded (no 1px window on scaled X11 desktops)")
+
+        if (NOT _juce_x11_src MATCHES "T3K_X11_HINT_OVERFLOW")
+            message(WARNING
+                "T3K_X11_HINT_OVERFLOW: could not find sizing hints anchor in ${_juce_x11_cpp}. "
+                "JUCE source layout may have changed upstream.")
+        else()
+            file(WRITE "${_juce_x11_cpp}" "${_juce_x11_src}")
+            message(STATUS "Patched JUCE XWindowSystem: WM size hints bounded (no 1px window on scaled X11 desktops)")
+        endif()
     endif()
 endif()
 
@@ -905,13 +951,18 @@ void AccessibilityHandler::postAnnouncement (const String& announcementString, A
         string(REPLACE "\n" "${_juce_nl}" _juce_a11y_announce_new "${_juce_a11y_announce_new}")
         string(REPLACE "${_juce_a11y_announce_old}" "${_juce_a11y_announce_new}" _juce_a11y_win_src "${_juce_a11y_win_src}")
         if (NOT _juce_a11y_win_src MATCHES "T3K_UIA_ANNOUNCE")
-            message(FATAL_ERROR
-                "T3K_UIA_ANNOUNCE: failed to patch ${_juce_a11y_win_cpp}. "
-                "The JUCE source layout likely changed in this version. Update the patch "
-                "anchors in CMakeLists.txt.")
+            if (WIN32)
+                message(FATAL_ERROR
+                    "T3K_UIA_ANNOUNCE: failed to patch ${_juce_a11y_win_cpp}. "
+                    "The JUCE source layout likely changed in this version. Update the patch "
+                    "anchors in CMakeLists.txt.")
+            else()
+                message(STATUS "Skipped T3K_UIA_ANNOUNCE patch (Windows-only file on non-Windows platform)")
+            endif()
+        else()
+            file(WRITE "${_juce_a11y_win_cpp}" "${_juce_a11y_win_src}")
+            message(STATUS "Patched JUCE Accessibility (Windows): announcements go to the screen reader via UIA, not in-process SAPI speech")
         endif()
-        file(WRITE "${_juce_a11y_win_cpp}" "${_juce_a11y_win_src}")
-        message(STATUS "Patched JUCE Accessibility (Windows): announcements go to the screen reader via UIA, not in-process SAPI speech")
     endif()
 endif()
 

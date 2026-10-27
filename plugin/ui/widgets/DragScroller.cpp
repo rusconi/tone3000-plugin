@@ -2,6 +2,8 @@
 
 #include <cmath>
 
+#include "../core/Keyboard.h"
+
 namespace t3k::ui {
 
 DragScroller::DragScroller(Axis axis, Keys keys) : axis_(axis), keys_(keys) {
@@ -69,7 +71,7 @@ bool DragScroller::scrollByKey(const juce::KeyPress& key) {
 
 bool DragScroller::keyPressed(const juce::KeyPress& key) { return keys_ == Keys::scroll && scrollByKey(key); }
 
-void DragScroller::reveal(const juce::Component& target, int margin) {
+void DragScroller::reveal(const juce::Component& target, int margin, int bottomInset) {
   const auto* content = getViewedComponent();
   if (content == nullptr || !content->isParentOf(&target)) return;
   // The target's box in the content's space. Crossing a nested scroller on
@@ -89,16 +91,23 @@ void DragScroller::reveal(const juce::Component& target, int margin) {
   const bool vertical = axis_ == Axis::vertical;
   const int start = (vertical ? box.getY() : box.getX()) - margin;
   const int end = (vertical ? box.getBottom() : box.getRight()) + margin;
+  // An on-screen keyboard covers the bottom of a vertical scroller; keep the
+  // target above it. Horizontal lanes are unaffected.
+  const int usable = juce::jmax(1, s.visible - (vertical ? bottomInset : 0));
   // Past the top edge (or too tall to fit): align its start. Past the
   // bottom edge: align its end. Within view: leave the page where it is.
-  if (start < s.position || end - start > s.visible)
+  if (start < s.position || end - start > usable)
     setSpanPosition(start);
-  else if (end > s.position + s.visible)
-    setSpanPosition(end - s.visible);
+  else if (end > s.position + usable)
+    setSpanPosition(end - usable);
 }
 
 void DragScroller::globalFocusChanged(juce::Component* focused) {
-  if (focused != nullptr) reveal(*focused, focusMargin_);  // only a descendant of the content moves the view
+  if (focused == nullptr) return;
+  // Text entry sits under the on-screen keyboard; keep it in view above the
+  // keyboard. Everything else keeps the owner's focusMargin alone.
+  const bool textInput = dynamic_cast<juce::TextEditor*>(focused) != nullptr;
+  reveal(*focused, focusMargin_, textInput ? keyboard::oskHeight() : 0);
 }
 
 void DragScroller::mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) {

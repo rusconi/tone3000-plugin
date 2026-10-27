@@ -46,3 +46,4 @@ if anchor not in src:
 open(path, "w").write(src.replace(anchor, fix, 1))
 print("patched", path)
 PY
+
