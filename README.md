@@ -1,7 +1,7 @@
 # TONE3000 Plugin
 >> ** This is a fork** of [grebius/tone3000-plugin](https://github.com/greblus/tone3000-plugin)
->> that adds OSK on the Raspberry Pi ans the Wayland compositor labwc**
->> 
+>> that adds OSK on the Raspberry Pi and the Wayland compositor labwc**
+>>
 > **This is a fork** of [tone-3000/tone3000-plugin](https://github.com/tone-3000/tone3000-plugin)
 > that adds **hosted VST3/LV2 effects on Linux**; see
 > [This fork: hosted effects on Linux](#this-fork-hosted-effects-on-linux). Everything else
