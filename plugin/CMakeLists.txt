@@ -43,23 +43,29 @@ project(TONE3000 VERSION ${T3K_VERSION})   # Set version of the plugin
 # AU/VST3/LV2/CLAP coexist with official TONE3000 builds instead of
 # colliding with them.
 set(T3K_DISPLAY_NAME "TONE3000")
-set(T3K_PRODUCT_NAME "${PROJECT_NAME}")
+if(NOT DEFINED T3K_PRODUCT_NAME)
+    set(T3K_PRODUCT_NAME "${PROJECT_NAME}")
+endif()
 set(T3K_COMPANY_NAME "TONE3000")
 set(T3K_MANUFACTURER_CODE "TFTF")
 set(T3K_LV2_URI "https://www.tone3000.com/plugin")
 set(T3K_CLAP_ID "com.tone3000.plugin")
 set(T3K_APP_DATA_DIR_NAME "TONE3000")
 include("${CMAKE_CURRENT_SOURCE_DIR}/../cmake/ForkIdentity.cmake" OPTIONAL)
+if(NOT T3K_FORK_NAMESPACED AND DEFINED T3K_PRODUCT_NAME)
+    set(PLUGIN_NAME "${T3K_PRODUCT_NAME}")
+endif()
 
 option(HEADLESS "Disable GUI (headless/embedded build)" OFF)
 # The UI's testbed app (plugin/ui/testbed: scenario captures, pixel compare,
 # --selftest, --bench) as part of this build; registers its self-tests with
 # ctest. Also configurable on its own: cmake -S plugin/ui/testbed -B build-ui.
 option(T3K_BUILD_UI_TESTBED "Build the UI testbed (UiTestbed) and register its self-tests" OFF)
+option(BUILD_VST3 "Build VST3 format" ON)
 option(BUILD_AAX "Build AAX (Avid) format" ON)
 option(BUILD_LV2 "Build LV2 format (native Linux plugin standard)" ON)
 option(BUILD_CLAP "Build CLAP format (via clap-juce-extensions)" ON)
-set(_plugin_formats "VST3") # Default plugin format
+set(_plugin_formats "")
 
 # iOS has no desktop plugin host, so none of the plugin formats apply: VST3,
 # AU (the desktop v2 wrapper), AAX, LV2 and CLAP are all macOS/Windows/Linux
@@ -67,6 +73,7 @@ set(_plugin_formats "VST3") # Default plugin format
 # in-host format there and is deliberately out of scope for this spike.
 if (T3K_IOS)
     set(_plugin_formats "")
+    set(BUILD_VST3 OFF)
     set(BUILD_AAX OFF)
     set(BUILD_LV2 OFF)
     set(BUILD_CLAP OFF)
@@ -75,6 +82,9 @@ endif()
 # Build for Desktop or Embedded
 if (NOT HEADLESS)
     list(APPEND _plugin_formats "Standalone")   # Add Standalone format
+    if (BUILD_VST3)
+        list(APPEND _plugin_formats "VST3")
+    endif()
     # Enable AU (Apple) format on macOS
     if (APPLE AND NOT T3K_IOS)
         list(APPEND _plugin_formats "AU")
@@ -85,7 +95,7 @@ if (NOT HEADLESS)
     if (BUILD_LV2)
         list(APPEND _plugin_formats "LV2")
     endif()
-    set(VST3_MANIFEST TRUE)                     # Create moduleinfo.json for VST3
+    set(VST3_MANIFEST ${BUILD_VST3})            # Create moduleinfo.json for VST3
     add_compile_definitions(HEADLESS=0)
 else()
     find_package(JUCE CONFIG REQUIRED)          # maybe remove?
@@ -278,6 +288,12 @@ juce_add_plugin(${PROJECT_NAME}
 
 # JUCE's CMake helper exposes PLUGINHOST_AU, while VST3 hosting is enabled
 # through the module option on the shared-code target.
+if(NOT "${T3K_PRODUCT_NAME}" STREQUAL "${PROJECT_NAME}")
+    if(TARGET ${PROJECT_NAME}_Standalone AND NOT TARGET ${T3K_PRODUCT_NAME}_Standalone)
+        add_custom_target(${T3K_PRODUCT_NAME}_Standalone DEPENDS ${PROJECT_NAME}_Standalone)
+    endif()
+endif()
+
 target_compile_definitions(${PROJECT_NAME} PUBLIC JUCE_PLUGINHOST_VST3=1)
 # Linux also hosts LV2 (JUCE carries its own lilv). Not on macOS, so the
 # macOS releases keep hosting exactly AU + VST3.

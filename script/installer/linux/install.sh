@@ -270,8 +270,8 @@ configure_rcxml() {
     }
     function rules_block() {
       print "    <!-- >>> TONE3000 kiosk window rules >>> -->"
-      print "    <windowRule identifier=\"TONE3000\" serverDecoration=\"no\" />"
-      print "    <windowRule identifier=\"TONE3000\">"
+      print "    <windowRule identifier=\"TONE3000*\" serverDecoration=\"no\" />"
+      print "    <windowRule identifier=\"TONE3000*\">"
       print "      <action name=\"Maximize\" direction=\"both\" />"
       print "    </windowRule>"
       print "    <!-- <<< TONE3000 kiosk window rules <<< -->"
@@ -366,11 +366,18 @@ for arg in "$@"; do
   [[ "$arg" == "--kiosk" ]] && KIOSK=1
 done
 
-if [[ ! -d "$HERE/TONE3000.vst3" || ! -d "$HERE/TONE3000.lv2" ||
-      ! -f "$HERE/TONE3000.clap" || ! -f "$HERE/TONE3000" ]]; then
-  echo "Error: TONE3000.vst3, TONE3000.lv2, TONE3000.clap and/or TONE3000 not"
-  echo "found next to this script. Run install.sh from inside the extracted"
-  echo "release folder."
+APP_NAME="TONE3000"
+for cand in TONE3000-FXT TONE3000-FX TONE3000; do
+  if [[ -f "$HERE/$cand" || -d "$HERE/$cand.vst3" || -d "$HERE/$cand.lv2" || -f "$HERE/$cand.clap" ]]; then
+    APP_NAME="$cand"
+    break
+  fi
+done
+
+if [[ ! -d "$HERE/$APP_NAME.vst3" && ! -d "$HERE/$APP_NAME.lv2" &&
+      ! -f "$HERE/$APP_NAME.clap" && ! -f "$HERE/$APP_NAME" ]]; then
+  echo "Error: no plugin or standalone binary found next to this script."
+  echo "Run install.sh from inside the built or extracted release folder."
   exit 1
 fi
 
@@ -379,24 +386,32 @@ deps_ok=1
 check_and_install_deps || deps_ok=0
 check_linked_libs || deps_ok=0
 
-echo ""
-echo "Installing VST3 to $VST3_DIR ..."
-mkdir -p "$VST3_DIR"
-rm -rf "$VST3_DIR/TONE3000.vst3"
-cp -r "$HERE/TONE3000.vst3" "$VST3_DIR/"
+if [[ -d "$HERE/$APP_NAME.vst3" ]]; then
+  echo ""
+  echo "Installing VST3 to $VST3_DIR ..."
+  mkdir -p "$VST3_DIR"
+  rm -rf "$VST3_DIR/$APP_NAME.vst3"
+  cp -r "$HERE/$APP_NAME.vst3" "$VST3_DIR/"
+fi
 
-echo "Installing LV2 to $LV2_DIR ..."
-mkdir -p "$LV2_DIR"
-rm -rf "$LV2_DIR/TONE3000.lv2"
-cp -r "$HERE/TONE3000.lv2" "$LV2_DIR/"
+if [[ -d "$HERE/$APP_NAME.lv2" ]]; then
+  echo "Installing LV2 to $LV2_DIR ..."
+  mkdir -p "$LV2_DIR"
+  rm -rf "$LV2_DIR/$APP_NAME.lv2"
+  cp -r "$HERE/$APP_NAME.lv2" "$LV2_DIR/"
+fi
 
-echo "Installing CLAP to $CLAP_DIR ..."
-mkdir -p "$CLAP_DIR"
-install -m 644 "$HERE/TONE3000.clap" "$CLAP_DIR/TONE3000.clap"
+if [[ -f "$HERE/$APP_NAME.clap" ]]; then
+  echo "Installing CLAP to $CLAP_DIR ..."
+  mkdir -p "$CLAP_DIR"
+  install -m 644 "$HERE/$APP_NAME.clap" "$CLAP_DIR/$APP_NAME.clap"
+fi
 
-echo "Installing standalone app to $BIN_DIR ..."
-mkdir -p "$BIN_DIR"
-install -m 755 "$HERE/TONE3000" "$BIN_DIR/TONE3000"
+if [[ -f "$HERE/$APP_NAME" ]]; then
+  echo "Installing standalone app to $BIN_DIR ..."
+  mkdir -p "$BIN_DIR"
+  install -m 755 "$HERE/$APP_NAME" "$BIN_DIR/$APP_NAME"
+fi
 
 if compgen -G "${HERE}/factory-presets/*.t3kpreset" > /dev/null; then
   echo "Installing factory presets to $FACTORY_DIR ..."
@@ -415,16 +430,16 @@ fi
 echo "Installing desktop entry and icon to $DATA_DIR ..."
 mkdir -p "$DATA_DIR/applications" "$DATA_DIR/icons/hicolor/512x512/apps"
 install -m 644 "$HERE/tone3000.png" "$DATA_DIR/icons/hicolor/512x512/apps/tone3000.png"
-cat > "$DATA_DIR/applications/tone3000.desktop" <<EOF
+cat > "$DATA_DIR/applications/${APP_NAME,,}.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=TONE3000
-Comment=Play NAM captures and IRs straight from TONE3000
-Exec=$BIN_DIR/TONE3000
+Name=$APP_NAME
+Comment=Play NAM captures and IRs straight from $APP_NAME
+Exec=$BIN_DIR/$APP_NAME
 Icon=tone3000
 Terminal=false
 Categories=AudioVideo;Audio;Music;
-StartupWMClass=TONE3000
+StartupWMClass=$APP_NAME
 EOF
 command -v update-desktop-database >/dev/null &&
   update-desktop-database "$DATA_DIR/applications" 2>/dev/null || true

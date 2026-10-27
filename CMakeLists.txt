@@ -53,6 +53,7 @@ endif()
 set(CMAKE_CXX_STANDARD 20)
 set(LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/libs)
 
+option(BUILD_VST3 "Build VST3 format" ON)
 option(T3K_TOUCH_UI "Build for touchscreen kiosk display (coarse pointer, Wayland OSK)" OFF)
 set(T3K_DESIGN_HEIGHT "" CACHE STRING "Custom UI design canvas height (default 576 for 16:9 kiosk, 600 for 1024x600)")
 if (T3K_TOUCH_UI)

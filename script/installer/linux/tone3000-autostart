@@ -13,8 +13,17 @@
 set -u
 
 SELF_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-APP="${T3K_APP:-$SELF_DIR/TONE3000}"
-[ -x "$APP" ] || APP="$HOME/.local/bin/TONE3000"
+APP="${T3K_APP:-}"
+if [ -z "$APP" ]; then
+    for candidate in "$SELF_DIR/TONE3000-FXT" "$SELF_DIR/TONE3000-FX" "$SELF_DIR/TONE3000" \
+                     "$HOME/.local/bin/TONE3000-FXT" "$HOME/.local/bin/TONE3000-FX" "$HOME/.local/bin/TONE3000"; do
+        if [ -x "$candidate" ]; then
+            APP="$candidate"
+            break
+        fi
+    done
+fi
+[ -n "$APP" ] || APP="$SELF_DIR/TONE3000"
 DEVICE="${T3K_AUDIO_DEVICE:-MOTU M2}"
 STATE="$HOME/.local/state/tone3000"
 OUT="$STATE/app.out"
@@ -36,7 +45,8 @@ fi
 # the UI scrolls a focused text field above this band (design px, scale 1).
 export T3K_OSK_HEIGHT="${T3K_OSK_HEIGHT:-220}"
 
-if pgrep -x TONE3000 >/dev/null; then
+APP_NAME="$(basename "$APP")"
+if pgrep -x "$APP_NAME" >/dev/null || pgrep -x TONE3000 >/dev/null; then
     log "TONE3000 already running; not starting another"
     exit 0
 fi
